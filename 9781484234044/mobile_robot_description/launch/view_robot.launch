@@ -1,0 +1,15 @@
+<launch>
+
+	<arg name="model" />
+
+	<!-- Parsing xacro and setting robot_description parameter -->
+	<param name="robot_description" command="$(find xacro)/xacro.py $(find mobile_robot_description)/urdf/robot_model.xacro" />
+
+
+	<!-- Starting robot state publish which will publish tf -->
+	<node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" />
+
+	<!-- Launch visualization in rviz -->
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find mobile_robot_description)/config/robot.rviz" required="true" />
+
+</launch>

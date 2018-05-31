@@ -1,0 +1,20 @@
+<launch>
+
+  <include file="$(find mobile_robot_description)/launch/view_robot.launch" />
+
+
+  <rosparam param="base_width">0.125</rosparam>
+  <rosparam param="ticks_meter">39</rosparam>
+
+
+  <node name="robot_bt_driver_node" pkg="mobile_robot_pkg" type="robot_bt_driver.py" output="screen">
+
+  </node>
+
+
+  <node pkg="mobile_robot_pkg" type="twist_to_motors.py" name="twist_to_motors" output="screen"/>
+
+  <node pkg="mobile_robot_pkg" type="diff_tf.py" name="diff_tf" output="screen"/> 
+
+ 
+</launch>
