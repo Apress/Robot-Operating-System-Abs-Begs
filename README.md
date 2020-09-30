@@ -1,6 +1,4 @@
-# Abs-Begs Bot OS
-
-# Apress Source Code
+# Apress Bot-OS
 
 This repository accompanies [*Robot Operating System (ROS) for Absolute Beginners:Robotics Programming Made Easy*](https://www.apress.com/9781484234044) by Lentin Joseph (Apress, 2018).
 
