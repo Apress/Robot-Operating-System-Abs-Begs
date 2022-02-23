@@ -52,8 +52,6 @@ diff_controller.py - controller for a differential drive
 """
 
 import rospy
-#import roslib
-#roslib.load_manifest('differential_drive')
 from math import sin, cos, pi
 
 from geometry_msgs.msg import Quaternion
@@ -81,11 +79,11 @@ class DiffTf:
 
 	#Wheel radius : 0.0325 
         # wheel circum = 2* 3.14 * 0.0325 = 0.2041
-	# One rotation encoder ticks : 8 ticks
-	# For 1 meter: 8 * ( 1 / 0.2041) = 39 ticks
+	# One rotation encoder ticks : 20 ticks (resolution of encoder disk)
+	# For 1 meter: 20 * ( 1 / 0.2041) = 98 ticks
 
         self.rate = rospy.get_param('~rate',10.0)  # the rate at which to publish the transform
-        self.ticks_meter = float(rospy.get_param('ticks_meter', 39))  # The number of wheel encoder ticks per meter of travel
+        self.ticks_meter = float(rospy.get_param('ticks_meter', 98))  # The number of wheel encoder ticks per meter of travel
         self.base_width = float(rospy.get_param('~base_width', 0.125)) # The wheel base width in meters
         
         self.base_frame_id = rospy.get_param('~base_frame_id','base_footprint') # the name of the base frame of the robot
@@ -113,10 +111,9 @@ class DiffTf:
         self.th = 0
         self.dx = 0                 # speeds in x/rotation
         self.dr = 0
-
-	self.yaw = 0.01
-	self.pitch = 0.01
-	self.roll = 0.01
+        self.yaw = 0.01
+        self.pitch = 0.01
+        self.roll = 0.01
 
         self.then = rospy.Time.now()
 
@@ -125,9 +122,6 @@ class DiffTf:
         # subscriptions
         rospy.Subscriber("left_ticks", Int32, self.lwheelCallback)
         rospy.Subscriber("right_ticks", Int32, self.rwheelCallback)
-
-        #rospy.Subscriber("imu_data", Vector3, self.imu_value_update)
-
 
         self.odomPub = rospy.Publisher("odom", Odometry,queue_size=10)
         self.odomBroadcaster = TransformBroadcaster()
@@ -191,16 +185,6 @@ class DiffTf:
             quaternion.z = sin( self.th / 2 )
             quaternion.w = cos( self.th / 2 )
 
-	    '''
-            try:		
-            	quaternion.z = self.quaternion_1[2]
-            	quaternion.w = self.quaternion_1[3]
-
-	    except:
-		quaternion.z = sin( self.th / 2 )
-		quaternion.w = cos( self.th / 2 )
-		pass
-            '''
             self.odomBroadcaster.sendTransform(
                 (self.x, self.y, 0),
                 (quaternion.x, quaternion.y, quaternion.z, quaternion.w),
@@ -222,26 +206,6 @@ class DiffTf:
             odom.twist.twist.angular.z = self.dr
             self.odomPub.publish(odom)
             
-    def imu_value_update(self, imu_data):
-	    orient = Vector3()
-
-            orient = imu_data
-
-	    self.yaw = orient.x
- 	    self.pitch = orient.y
-	    self.roll = orient.z
-
-	    try:	
-	    	self.quaternion_1 = tf.transformations.quaternion_from_euler(self.yaw, self.pitch, self.roll)
-	  	#print self.quaternion_1[0]
-	  	#print self.quaternion_1[1]
-	  	#print self.quaternion_1[2]
-	  	#print self.quaternion_1[3]
-
- 	    except:
-		rospy.logwarn("Unable to get quaternion values")
-	        pass
-
 
     #############################################################################
     def lwheelCallback(self, msg):

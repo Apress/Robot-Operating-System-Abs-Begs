@@ -3,15 +3,12 @@
  This is a standalone URDF model of 2WD smart car robot 
  -->
 
-
-
-
 <robot name="mobile_robot" xmlns:xacro="http://ros.org/wiki/xacro">
 
 
-  <property name="M_PI" value="3.1415926535897931" />
-  <property name="M_PI_2" value="1.570796327" />
-  <property name="DEG_TO_RAD" value="0.017453293" />
+  <xacro:property name="M_PI" value="3.1415926535897931" />
+  <xacro:property name="M_PI_2" value="1.570796327" />
+  <xacro:property name="DEG_TO_RAD" value="0.017453293" />
 
  <!-- <xacro:macro name="mobile_robot">   -->
 

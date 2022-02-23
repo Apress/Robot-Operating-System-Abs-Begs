@@ -27,8 +27,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import roslib
-#roslib.load_manifest('turtlebot_teleop') # No longer needed in catkin!
 import rospy
 
 from geometry_msgs.msg import Twist
@@ -106,8 +104,8 @@ if __name__=="__main__":
     control_speed = 0
     control_turn = 0
     try:
-        print msg
-        print vels(speed,turn)
+        print (msg)
+        print (vels(speed,turn))
         while(1):
             key = getKey()
             if key in moveBindings.keys():
@@ -126,9 +124,9 @@ if __name__=="__main__":
 
                 count = 0
 
-                print vels(speed,turn)
+                print (vels(speed,turn))
                 if (status == 14):
-                    print msg
+                    print (msg)
                 status = (status + 1) % 15
             elif key == ' ' or key == 'k' :
                 x = 0
@@ -165,12 +163,9 @@ if __name__=="__main__":
             twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = control_turn
             pub.publish(twist)
 
-            #print("loop: {0}".format(count))
-            #print("target: vx: {0}, wz: {1}".format(target_speed, target_turn))
-            #print("publihsed: vx: {0}, wz: {1}".format(twist.linear.x, twist.angular.z))
 
     except:
-        print e
+        rospy.logwarn("Exception in teleoperation")
 
     finally:
         twist = Twist()

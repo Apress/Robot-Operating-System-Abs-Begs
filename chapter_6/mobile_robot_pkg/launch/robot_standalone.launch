@@ -1,20 +1,16 @@
 <launch>
 
+ <!-- Launch robot visualization in Rviz with Fixed frame as Odom -->
   <include file="$(find mobile_robot_description)/launch/view_robot.launch" />
 
-
-  <rosparam param="base_width">0.125</rosparam>
-  <rosparam param="ticks_meter">39</rosparam>
-
-
-  <node name="robot_bt_driver_node" pkg="mobile_robot_pkg" type="robot_bt_driver.py" output="screen">
-
+  <!-- ROS Serial driver for handling Bluetooth serial port -->
+  <node name="robot_bt_driver_node" pkg="rosserial_python" type="serial_node.py" args="_port:=/dev/rfcomm0 _baud:=9600" output="screen">
   </node>
 
-
+  <!-- Differential drive node to convert twist to motor speed, encoder ticks to odom and goal pose to command velocity -->
   <node pkg="mobile_robot_pkg" type="twist_to_motors.py" name="twist_to_motors" output="screen"/>
-
   <node pkg="mobile_robot_pkg" type="diff_tf.py" name="diff_tf" output="screen"/> 
+  <node pkg="mobile_robot_pkg" type="dead_reckoning.py" name="dead_reckoning" output="screen"/> 
 
  
 </launch>

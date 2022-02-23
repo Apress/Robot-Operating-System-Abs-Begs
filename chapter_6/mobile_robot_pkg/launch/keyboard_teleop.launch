@@ -8,17 +8,22 @@
   <rosparam param="ticks_meter">39</rosparam>
 
 
-  <node name="robot_bt_driver_node" pkg="mobile_robot_pkg" type="robot_bt_driver.py" output="screen">
-
+  <node name="robot_bt_driver_node" pkg="rosserial_python" type="serial_node.py" args="_port:=/dev/rfcomm0 _baud:=9600" output="screen">
   </node>
+
 
 
   <node pkg="mobile_robot_pkg" type="twist_to_motors.py" name="twist_to_motors" output="screen"/>
   
-  
-  <node pkg="mobile_robot_pkg" type="robot_teleop_key" name="teleop_keyboard"  output="screen">
-
-    <remap from="/teleop_keyboard/cmd_vel" to="/cmd_vel"/> 
-
+  <!-- Load teleop -->
+  <node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering">
+    <param name="default_topic" value="cmd_vel"/>
+    <param name="default_vx_max" value="3.0" />
+    <param name="default_vx_min" value="-3.0" />
+    <param name="default_vw_max" value="3.0" />
+    <param name="default_vw_min" value="-3.0" />
   </node>
+
+
+
 </launch>

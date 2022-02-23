@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 """
    twist_to_motors - converts a twist message to motor commands.  Needed for navigation stack
    
@@ -20,9 +21,7 @@
 """
 
 import rospy
-import roslib
-from std_msgs.msg import Float32
-from std_msgs.msg import Int32MultiArray
+from std_msgs.msg import Float32, Int32, Bool
 from geometry_msgs.msg import Twist 
 
 #Mapping -1 - 1 to -255 to 255
@@ -39,14 +38,22 @@ class TwistToMotors():
         rospy.init_node("twist_to_motors")
         nodename = rospy.get_name()
         rospy.loginfo("%s started" % nodename)
-    
+
+        rospy.on_shutdown(self.shutdown_cb)
+
+
+        self.sign = lambda a: (a>0) - (a<0)
+
+        self.left_speed = Int32()
+        self.right_speed = Int32()
+
         self.w = rospy.get_param("~base_width", 0.125)
+        self.fixed_speed = rospy.get_param("~fixed_speed", 180)
     
-        #self.pub_lmotor = rospy.Publisher('lwheel_vtarget', Float32,queue_size=10)
-        #self.pub_rmotor = rospy.Publisher('rwheel_vtarget', Float32,queue_size=10)
+        self.pub_lmotor = rospy.Publisher('set_left_speed', Int32,queue_size=1)
+        self.pub_rmotor = rospy.Publisher('set_right_speed', Int32,queue_size=1)
 
-	self.pub_speed = rospy.Publisher('/set_speed',Int32MultiArray,queue_size=10)
-
+        self.reset = rospy.Publisher('reset', Bool,queue_size=1)
 
         rospy.Subscriber('/cmd_vel', Twist, self.twistCallback)
     
@@ -55,7 +62,17 @@ class TwistToMotors():
         self.timeout_ticks = rospy.get_param("~timeout_ticks", 2)
         self.left = 0
         self.right = 0
-        
+    
+    def shutdown_cb(self):
+        rospy.logwarn("Resetting board")
+        self.pub_lmotor.publish(0)
+        self.pub_rmotor.publish(0)
+
+        self.reset.publish(0)
+
+
+        pass
+
     #############################################################
     def spin(self):
     #############################################################
@@ -82,31 +99,19 @@ class TwistToMotors():
             
         self.right = 1.0 * self.dx + self.dr * self.w / 2 
         self.left = 1.0 * self.dx - self.dr * self.w / 2
-        #rospy.loginfo("publishing: (%f, %f)", self.left, self.right) 
- 
                
-	self.speed_data = Int32MultiArray()
+        self.left_mapped = self.sign(self.left)*self.fixed_speed
+        self.right_mapped = self.sign(self.right)*self.fixed_speed
 
+        self.left_speed.data = int(self.left_mapped)
+        self.right_speed.data =int(self.right_mapped)
 
-	self.right_mapped = interp(self.right, [-1,1], [-60,60])
-	self.left_mapped = interp(self.left, [-1,1], [-60,60])
+        rospy.loginfo(self.left_speed)
+        rospy.loginfo(self.right_speed)
 
-	if(self.left_mapped < 0 and self.right_mapped > 0):
+        self.pub_lmotor.publish(self.left_speed)
+        self.pub_rmotor.publish(self.right_speed)
 
-		self.speed_data.data = [10,self.right_mapped]
-
-	elif(self.left_mapped > 0 and self.right_mapped < 0):
-
-		self.speed_data.data = [self.left_mapped,10]
-	else:
-		self.speed_data.data = [self.left_mapped,self.right_mapped]
-
-
-	self.pub_speed.publish(self.speed_data)
-
-        #self.pub_lmotor.publish(self.left)
-        #self.pub_rmotor.publish(self.right)
-            
         self.ticks_since_target += 1
 
     #############################################################

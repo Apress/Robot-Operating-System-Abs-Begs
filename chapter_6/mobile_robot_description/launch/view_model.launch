@@ -10,6 +10,6 @@
 	<node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
 	<!-- Launch visualization in rviz -->
-	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find mobile_robot_description)/config/robot.rviz" required="true" />
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find mobile_robot_description)/config/model.rviz" required="true" />
 
 </launch>

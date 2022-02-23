@@ -2,7 +2,7 @@
 """
    dead_reckoning - Subscribe navigation goal from Rviz and move robot to the pose   
    
-    Copyright (C) 2017 Lentin Joseph. 
+    Copyright (C) 2021 Lentin Joseph. 
      
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -19,378 +19,222 @@
 """
 import rospy
 
-import sys
-
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Twist 
+from geometry_msgs.msg import Twist
+from std_msgs.msg import Float32
 import tf
 
 from math import radians, degrees
 import math
 
-from std_msgs.msg import Int64
-
-
 import signal
 import sys
 
+class DeadReckoning:
 
-global robot_pose_x 
-global robot_pose_y 
-global robot_yaw 
+    def __init__(self):
 
+        self.goal_x = 0.0
+        self.goal_y = 0.0
+        self.goal_yaw = 0.0
 
-global goal_x 
-global goal_y 
-global goal_yaw 
+        self.robot_pose_x = 0.0
+        self.robot_pose_y = 0.0
+        self.robot_yaw = 0.0
 
-global turn_vel
-global linear_vel
+        self.stop_vel = 0
+        self.delta_angle = 45
 
-global stop_vel
+        self.turn_vel = 15
+        self.linear_vel = 1
 
-global delta_angle 
+        self.delta_distance = 0.4
+        self.obstacle_distance = 50
 
-global delta_distance 
+        self.obstacle_distance_upper_limit = 40
+        self.obstacle_distance_lower_limit = 5
 
-global obstacle_distance
+        #Publish command velocity
+        self.pub_twist = rospy.Publisher('/cmd_vel', Twist, queue_size=1)        
+        #Subscriber of Move base goal command
+        rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.poseCallback)
+        #Odom callback
+        rospy.Subscriber('/odom', Odometry, self.odomCallback)
+        #Obstacle callback
+        rospy.Subscriber('/obstacle_distance', Float32, self.obstacleCallback)
 
-robot_pose_x = 0.0
-robot_pose_y = 0.0
-robot_yaw = 0.0
+        signal.signal(signal.SIGINT, self.shutdown)
+        pass
 
+    def odomCallback(self,msg):
 
-goal_x = 0.0
-goal_y = 0.0
+        position = msg.pose.pose.position
+        orientation = msg.pose.pose.orientation
 
-goal_yaw = 0.0
+        self.robot_pose_x = position.x
+        self.robot_pose_y = position.y
 
-turn_vel = 15
-linear_vel = 1
+        roll, pitch, yaw = tf.transformations.euler_from_quaternion(
+            [orientation.x, orientation.y, orientation.z, orientation.w])
 
-stop_vel = 0
+        yaw_degree = degrees(yaw)
 
-delta_angle = 45
+        if(yaw_degree < 0):
+            yaw_degree = 360 + yaw_degree
 
-delta_distance = 0.4
+        self.robot_yaw = yaw_degree
 
-obstacle_distance = 50
+        rospy.loginfo(msg)
 
-obstacle_distance_upper_limit = 40
 
-obstacle_distance_lower_limit = 5
-##########################################################################################
+    def poseCallback(self,msg):
 
-#Key board handler
+        position = msg.pose.position
+        quat = msg.pose.orientation
 
-def quit_code(signum, frame):
+        rospy.loginfo("Point Position: [ %f, %f, %f ]"%(position.x, position.y, position.z))
+        rospy.loginfo("Quat Orientation: [ %f, %f, %f, %f]"%(quat.x, quat.y, quat.z, quat.w))
 
-	global pub_twist
+        # Pose of robot
+        self.goal_x = position.x
+        self.goal_y = position.y
 
-	global stop_vel
-	# To reset the robot
-	rospy.loginfo("Quitting code")
+        # Also print Roll, Pitch, Yaw
+        roll, pitch, yaw = tf.transformations.euler_from_quaternion(
+            [quat.x, quat.y, quat.z, quat.w])
 
-	for i in range(0, 100):
+        self.goal_yaw = degrees(yaw)
 
-		send_turn_cmd(stop_vel)
-		rospy.sleep(0.02)
+        if(self.goal_yaw < 0):
+            self.goal_yaw = 360 + self.goal_yaw
 
-	sys.exit(1)
 
-signal.signal(signal.SIGINT, quit_code)
+        self.do_dead_reckoning(self.goal_x,self.goal_y,self.goal_yaw)    
 
-##########################################################################################
-#Ultrasonic obstacle callback
-def obstacleCallback(msg):
-	global obstacle_distance
 
+    def do_dead_reckoning(self,goal_x, goal_y, yaw_degree):
+        
+        rospy.loginfo("Goal Position: [ %f, %f, %f ]" % (goal_x, goal_y, yaw_degree))
+        rospy.loginfo("Robot Position: [ %f, %f, %f ]" %
+                  (self.robot_pose_x, self.robot_pose_y, self.robot_yaw))
 
-	obstacle_distance = msg.data
+        difference_angle = yaw_degree - self.robot_yaw
+        rospy.loginfo("Difference angle %d",difference_angle)
 
+        if(difference_angle > 180):
+            difference_angle = 360 + difference_angle
+            self.turn_vel = -self.turn_vel
 
+        rospy.loginfo("Robot rotating along in the goal axis")
 
+#######################################################################################
+        #Robot is rotating to align to the goal position
+        while(abs(difference_angle) > self.delta_angle):
 
-def send_turn_cmd(speed):
+            try:
+                difference_angle = self.goal_yaw - self.robot_yaw
+                rospy.loginfo("Difference angle [%f]" % (
+                    difference_angle))
+                difference_angle = abs(difference_angle)
+                self.send_turn_cmd(1)
+                rospy.sleep(0.01)
+            except:
+                rospy.logwarn("Exception at rotation")
+                self.send_turn_cmd(self.stop_vel)
+                rospy.sleep(2)
+                sys.exit(0)
 
-	global pub_twist
+        self.send_turn_cmd(self.stop_vel)
+        rospy.sleep(2)
 
-	twist = Twist()
+############################################################################################
+        #Robot moving to goal point
+        rospy.loginfo("Robot moving to the goal point")
 
-        twist.linear.x = 0; twist.linear.y = 0; twist.linear.z = 0
+        distance = math.hypot(goal_x - self.robot_pose_x, self.goal_y - self.robot_pose_y)
+        rospy.loginfo("Robot moving to the goal point [%f]" % (distance))
 
-        twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = speed
 
-        pub_twist.publish(twist)
+        while(distance > self.delta_distance):
 
+            try:
 
+                distance = math.hypot(goal_x - self.robot_pose_x, goal_y - self.robot_pose_y)
+                rospy.loginfo("Distance [%f]" % (distance))
+                self.send_linear_cmd(self.current_linear_velocity)
+                rospy.sleep(0.01)
 
+                if(distance > 1.5):
+                    rospy.logwarn("Robot went outside the goal")
+                    break
 
-def send_linear_cmd(speed):
+                if(self.obstacle_distance <= self.obstacle_distance_upper_limit and self.obstacle_distance >= self.obstacle_distance_lower_limit):
+                    rospy.logwarn(
+                        "Obstacle detected, stopping robot and moving away from it")
+                    self.send_linear_cmd(self.stop_vel)
+                    rospy.sleep(1)
+                    self.send_linear_cmd(-self.current_linear_velocity)
+                    rospy.sleep(0.4)
+                    self.send_linear_cmd(self.stop_vel)
+                    break
 
-	global pub_twist
+            except:
 
-	twist = Twist()
-        twist.linear.x = speed; twist.linear.y = 0; twist.linear.z = 0
+                rospy.logwarn("Exception at translation")
+                self.send_linear_cmd(self.stop_vel)
+                rospy.sleep(2)
+                sys.exit(0)
 
-        twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = 0
+        self.send_linear_cmd(self.stop_vel)
+        rospy.sleep(2)
 
 
-        pub_twist.publish(twist)
+    def send_linear_cmd(self,speed):
 
+        twist = Twist()
+        twist.linear.x = speed
+        twist.linear.y = 0
+        twist.linear.z = 0
 
-def do_dead_recoking(goal_x,goal_y,yaw_degree):
+        twist.angular.x = 0
+        twist.angular.y = 0
+        twist.angular.z = 0
 
+        self.pub_twist.publish(twist)
 
-	global turn_vel
-	global linear_vel
 
+    def send_turn_cmd(self,speed):
 
-	global delta_angle 
-	
-	global delta_distance
+        twist = Twist()
 
-	global obstacle_distance
+        twist.linear.x = 0
+        twist.linear.y = 0
+        twist.linear.z = 0
 
-	current_turn_velocity = [15,13,10,9,8,7,6,5]
-	current_linear_velocity = 1
+        twist.angular.x = 0
+        twist.angular.y = 0
+        twist.angular.z = speed
 
+        self.pub_twist.publish(twist)
 
-	rospy.loginfo("Goal Position: [ %f, %f, %f ]"%(goal_x, goal_y, goal_yaw))
+    def obstacleCallback(self,msg):
 
-	rospy.loginfo("Robot Position: [ %f, %f, %f ]"%(robot_pose_x , robot_pose_y , robot_yaw))
+        self.obstacle_distance = msg.data
+        rospy.loginfo(msg)
 
+    def shutdown(self,signum,frame):
+        rospy.loginfo("Shutting down node")
+        sys.exit(0)
+        pass
 
-	difference_angle = goal_yaw - robot_yaw
-
-	if(difference_angle > 180):
-		difference_angle  = 360 + difference_angle
-
-		turn_vel = -turn_vel
-
-	print difference_angle
-
-	rospy.loginfo("Robot rotating along in the goal axis")
-
-	
-
-	while(abs(difference_angle) > delta_angle):
-
-		try:
-
-			
-
-			difference_angle = goal_yaw - robot_yaw
-
-			distance = math.hypot(goal_x - robot_pose_x, goal_y - robot_pose_y)
-
-			rospy.loginfo("Difference angle [%f], Distance [%f]" %(difference_angle, distance))
-
-
-			#if(current_turn_velocity == turn_vel):
-			#	current_turn_velocity = turn_vel
-
-			difference_angle = abs(difference_angle)
-			
-
-			send_turn_cmd(current_turn_velocity[0])
-			
-			'''
-			if(difference_angle > 200):
-
-				send_turn_cmd(current_turn_velocity[6])
-
-			elif(difference_angle > 150 and difference_angle < 200):
-				send_turn_cmd(current_turn_velocity[3])
-
-			elif(difference_angle > 100 and difference_angle < 150):
-				send_turn_cmd(current_turn_velocity[2])
-
-			elif(difference_angle > 50 and difference_angle < 100):
-				send_turn_cmd(current_turn_velocity[1])
-
-			elif(difference_angle > 0 and difference_angle < 50):
-				send_turn_cmd(current_turn_velocity[0])
-			
-			'''
-
-			rospy.sleep(0.01)
-
-			#send_turn_cmd(0)
-
-
-			#current_turn_velocity += 0.001
-			
-			#print current_turn_velocity
-
-		except:
-
-			rospy.logwarn("Exception at rotation")
-
-			send_turn_cmd(stop_vel)
-			rospy.sleep(2)
-			sys.exit(0)	
-
-
-
-	send_turn_cmd(stop_vel)
-	rospy.sleep(2)
-
-
-	rospy.loginfo("Robot moving to the goal point")
-
-	distance = math.hypot(goal_x - robot_pose_x, goal_y - robot_pose_y)
-
-	rospy.loginfo("Robot moving to the goal point [%f]" %(distance))
-	
-	
-
-	while(distance > delta_distance):
-
-		try:
-
-			distance = math.hypot(goal_x - robot_pose_x, goal_y - robot_pose_y)
-
-			difference_angle = goal_yaw - robot_yaw
-
-			rospy.loginfo("Difference angle [%f], Distance [%f], Obstacle [%d]" %(difference_angle, distance,obstacle_distance))
-
-			#if(current_linar_velocity == linear_vel):
-			#	current_turn_velocity = linear_vel
-	
-			send_linear_cmd(current_linear_velocity)
-
-			rospy.sleep(0.01)
-
-			#send_linear_cmd(0)
-
-
-			#current_linar_velocity += 0.1
-
-			if(distance > 1.5):
-				rospy.logwarn("Robot went outside the goal")
-
-				break
-
-			
-			if(obstacle_distance <= obstacle_distance_upper_limit and obstacle_distance >= obstacle_distance_lower_limit):
-				rospy.logwarn("Obstacle detected, stopping robot and moving away from it")
-				send_linear_cmd(stop_vel)
-				rospy.sleep(1)
-				send_linear_cmd(-current_linear_velocity)
-				rospy.sleep(0.4)
-				#send_turn_cmd(current_turn_velocity[0])
-				#rospy.sleep(0.3)
-				send_linear_cmd(stop_vel)
-				break
-			
-
-	
-		except:	
-
-			rospy.logwarn("Exception at translation")
-			send_linear_cmd(stop_vel)
-			rospy.sleep(2)
-			sys.exit(0)	
-			
-
-
-	send_linear_cmd(stop_vel)
-	rospy.sleep(2)
-
-	
-
-
-
-def odomCallback(msg):
-
-
-    global robot_pose_x 
-    global robot_pose_y 
-    global robot_yaw 
-
-    position = msg.pose.pose.position
-    orientation = msg.pose.pose.orientation
-    
-    robot_pose_x = position.x
-    robot_pose_y = position.y
-
-    roll, pitch, yaw = tf.transformations.euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
-
-    yaw_degree = degrees(yaw)
-
-    if(yaw_degree < 0):
-	yaw_degree = 360 + yaw_degree
-
-    robot_yaw = yaw_degree
-
-
-#Callback to accept the goal pose
-def poseCallback(msg):
-	#print msg
-
-
-	global goal_x 
-	global goal_y 
-	global goal_yaw 
-
-
-    	position = msg.pose.position
-    	quat = msg.pose.orientation
-
-    	#rospy.loginfo("Point Position: [ %f, %f, %f ]"%(position.x, position.y, position.z))
-    	#rospy.loginfo("Quat Orientation: [ %f, %f, %f, %f]"%(quat.x, quat.y, quat.z, quat.w))
-
-
-	#Pose of robot
-
-	goal_x = position.x
-
-	goal_y = position.y
-
-
-    	# Also print Roll, Pitch, Yaw
-    	roll, pitch, yaw = tf.transformations.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
-
-	goal_yaw = degrees(yaw)
-
-	if(goal_yaw < 0):
-		goal_yaw = 360 + goal_yaw
-
-    	#rospy.loginfo("Goal Yaw angle: %s"%str(yaw_degree))  
-
-	#Do dead recokning
-	do_dead_recoking(goal_x,goal_y,goal_yaw)
 
 
 if __name__ == "__main__":
-	rospy.init_node("Dead_reckoning_node")
+    rospy.init_node("Dead_reckoning_node")
+    rospy.loginfo("Starting Dead reckoning node")
 
-	rospy.loginfo("Starting Dead recokning node")
-
-	global pub_twist
-
-	pub_twist = rospy.Publisher('/cmd_vel',Twist ,queue_size=1)
+    obj = DeadReckoning()
 
 
-        rospy.Subscriber('/move_base_simple/goal', PoseStamped, poseCallback)
-    
-        rospy.Subscriber('/odom', Odometry, odomCallback)
-
-        rospy.Subscriber('/obstacle_distance', Int64, obstacleCallback)
-
-
-	rospy.spin()
-	'''
-	while(True):
-	    try:
-		rospy.sleep(0.2)
-		#pass
-
-	    except:
-		#pass
-		sys.exit(0)
-		
-	'''
-
+    rospy.spin()
