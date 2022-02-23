@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
-var = input("Enter the number :> ")
-try:
-	result = 1.0 / var
-	print "Result",result
-
-except:
-	print "Unable to divide"
-
+def divide(a, b):
+	try:
+		result = a// b
+		print("Your answer is :", result)
+	except ZeroDivisionError:
+		print("You are dividing by zero")
+		
+# Look at the parameters and note the working of Program
+divide(3, 0)
 

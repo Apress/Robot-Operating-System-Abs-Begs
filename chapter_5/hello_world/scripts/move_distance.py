@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import rospy
 
@@ -33,21 +33,21 @@ def move_turtle(lin_vel,ang_vel,distance):
     vel = Twist()
     while not rospy.is_shutdown():
         
-	vel.linear.x = lin_vel
-	vel.linear.y = 0
-	vel.linear.z = 0
+        vel.linear.x = lin_vel
+        vel.linear.y = 0
+        vel.linear.z = 0
 
-	vel.angular.x = 0
-	vel.angular.y = 0
-	vel.angular.z = ang_vel
+        vel.angular.x = 0
+        vel.angular.y = 0
+        vel.angular.z = ang_vel
 
         #rospy.loginfo("Linear Vel = %f: Angular Vel = %f",lin_vel,ang_vel)
 
-	if(robot_x >= distance):
-		rospy.loginfo("Robot Reached destination")
-		rospy.logwarn("Stopping robot")
+        if(robot_x >= distance):
+	        rospy.loginfo("Robot Reached destination")
+	        rospy.logwarn("Stopping robot")
 
-		break
+	        break
 
         pub.publish(vel)
 
@@ -58,3 +58,4 @@ if __name__ == '__main__':
         move_turtle(float(sys.argv[1]),float(sys.argv[2]),float(sys.argv[3]))
     except rospy.ROSInterruptException:
         pass
+
