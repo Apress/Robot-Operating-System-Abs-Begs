@@ -28,8 +28,11 @@ def move_turtle(lin_vel,ang_vel):
         rospy.loginfo("Linear Vel = %f: Angular Vel = %f",lin_vel,ang_vel)
 
         pub.publish(vel)
-
-        rate.sleep()
+    # to stop the turtle
+    vel.linear.x = 0 
+    vel.angular.z = 0 
+    pub.publish(vel) 
+    rospy.spin()
 
 if __name__ == '__main__':
     try:
